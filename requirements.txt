@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+httpx
+huggingface_hub
+faster-whisper
+piper-tts
+kokoro-onnx>=0.6.1
+misaki[zh]
+fugashi
+jaconv
+mojimoji
+pyopenjtalk
