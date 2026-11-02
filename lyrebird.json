@@ -1,0 +1,21 @@
+{
+  "_note": "Portal connection profile for the speech node. UNVERIFIED against connections.py's exact profile schema (endpoint lookup by capability name, placeholder rendering, result extraction key) - send connections.py to finalize. The service side (paths, JSON bodies, response fields) is final.",
+  "connection_type": "lyrebird",
+  "display_name": "Speech node (STT + TTS)",
+  "default_url": "http://localhost:8795",
+  "capabilities": {"speech_to_text": true, "text_to_speech": true},
+  "endpoints": {
+    "health": {"method": "GET", "path": "/health"},
+    "speech_to_text": {"method": "POST", "path": "/api/transcribe", "body": {"audio_b64": "{audio_b64}", "language": "{language}", "model": "{model}", "vad_filter": "{vad_filter}"}, "result_key": "text"},
+    "text_to_speech": {"method": "POST", "path": "/api/speak", "body": {"text": "{text}", "voice": "{voice}", "length_scale": "{length_scale}"}, "result_key": "audio_b64"},
+    "voices": {"method": "GET", "path": "/api/voices"}
+  },
+  "options_schema": {
+    "language": {"type": "string", "default": null, "hint": "ISO code (en, de, ...); blank = auto-detect"},
+    "model": {"type": "string", "default": null, "hint": "whisper size or local path; blank = node default"},
+    "vad_filter": {"type": "boolean", "default": true, "hint": "skip silence before transcribing"},
+    "voice": {"type": "string", "default": null, "hint": "Piper voice id, e.g. en_US-lessac-medium; blank = node default"},
+    "length_scale": {"type": "number", "default": null, "hint": ">1 speaks slower, <1 faster"}
+  }
+}
+

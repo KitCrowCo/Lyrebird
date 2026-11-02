@@ -1,0 +1,37 @@
+# speech_direct on the dev node: two containers from this one folder (same main.py).
+#   lyrebird        CPU build (Dockerfile)      - Whisper speech-to-text, Piper + Kokoro voices   -> portal connection on port 8795
+#   lyrebird_clone  GPU build (Dockerfile.gpu)  - F5-TTS voice clones from clones/<name>/          -> portal connection on port 8797
+# One command builds and starts both: docker compose up -d --build   (first GPU build takes a while; later rebuilds reuse cached layers)
+# They are separate because Kokoro needs numpy 2 while F5-TTS on that image's Python 3.10 needs numpy 1.x - one environment cannot hold both.
+services:
+  speech:
+    build: .
+    container_name: lyrebird
+    restart: unless-stopped
+    ports: ["8795:8795"]
+    volumes:
+      - ${AUDIO_MODELS}:/models:rw       # whisper/ piper/ kokoro/
+    environment:
+      - STT_MODEL=small
+      - STT_COMPUTE_TYPE=int8
+      - TTS_ENGINES=piper,kokoro,espeak
+      - TTS_VOICE=kokoro:af_sky
+      - HF_HUB_OFFLINE=0 #1                 # nothing downloads; one-off commands override this explicitly
+
+  speech_clone:
+    build: {context: ., dockerfile: Dockerfile.gpu}
+    image: lyrebird-gpu:local
+    container_name: lyrebird-gpu-clone
+    restart: unless-stopped
+    ports: ["8797:8795"]
+    devices: ["/dev/kfd:/dev/kfd", "/dev/dri/renderD128:/dev/dri/renderD128"]
+    group_add: ["992", "44"]             # same render/video group ids as the image node's compose on this machine
+    security_opt: ["seccomp:unconfined"]
+    volumes:
+      - ${AUDIO_MODELS}:/models:rw       # f5/ clones
+    environment:
+      - TTS_ENGINES=clone
+      - TTS_VOICE=clone:sylus
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0
+      - PYTORCH_ROCM_ARCH=gfx1150        # Radeon 890M, same as the image node
+      - HF_HUB_OFFLINE=1

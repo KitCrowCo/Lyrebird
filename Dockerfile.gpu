@@ -1,0 +1,20 @@
+# Lyrebird GPU build - serves voice clones (F5-TTS). Same main.py as the CPU build in this folder; TTS_ENGINES decides what each container serves.
+# Base: the ROCm PyTorch image the image node on this machine was built from - Docker reuses the local copy, nothing is re-downloaded. The image node itself is not touched.
+FROM rocm/pytorch:rocm7.2.4_ubuntu22.04_py3.10_pytorch_release_2.7.1
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+# torchaudio must match the image's own torch build. If the image lacks it, install the ROCm wheel of the same version WITHOUT deps, so pip never swaps the ROCm torch for a CUDA one.
+RUN python -c "import torchaudio" 2>/dev/null || pip install --no-cache-dir --no-deps "torchaudio==$(python -c 'import torch; print(torch.__version__.split("+")[0])')" --index-url https://download.pytorch.org/whl/rocm6.3
+# f5-tts WITHOUT its declared deps (they would pull CUDA torch/torchaudio from PyPI); the list below is what its inference path imports (checked against f5-tts 1.1.22).
+# wandb/datasets/accelerate are imported by f5's trainer module even for inference; WANDB_MODE=disabled in compose keeps wandb inert.
+# /tmp/pin.txt pins torch + torchaudio to the image's own builds: if any package wants a different torch, pip stops with an error instead of quietly installing a CUDA build.
+RUN python -c "import importlib.metadata as m; print('torch==' + m.version('torch')); print('torchaudio==' + m.version('torchaudio'))" > /tmp/pin.txt && cat /tmp/pin.txt
+RUN pip install --no-cache-dir --no-deps f5-tts==1.1.22 && pip install --no-cache-dir -c /tmp/pin.txt "numpy<=1.26.4" accelerate cached_path datasets ema_pytorch hydra-core omegaconf librosa matplotlib pydub pypinyin rjieba safetensors soundfile tqdm transformers torchdiffeq unidecode vocos wandb x_transformers fastapi uvicorn httpx huggingface_hub
+# Fail the build here, not on the first request, if the stack does not import.
+RUN python -c "import torch, torchaudio, f5_tts.api; print('torch', torch.__version__, 'torchaudio', torchaudio.__version__)"
+COPY main.py .
+ENV SPEECH_MODELS_DIR=/models SERVER_PORT=8795 PYTHONUNBUFFERED=1 HF_HUB_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 WANDB_MODE=disabled GRADIO_ANALYTICS_ENABLED=False
+EXPOSE 8795
+CMD ["python3", "main.py"]
+
